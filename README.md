@@ -12,11 +12,11 @@ uv add pandas
 uv run python app/run_once.py
 uv run python app/run_many.py
 ```
-## Optional LLM Integration (Gemini)
+## Optional LLM Integration (Anthropic)
 ```bash
-uv add google-generativeai pydantic pydantic-settings
+uv add anthropic pydantic pydantic-settings
 cp .env.example .env
-uv run python app/llm_harness_gemini.py
+uv run python app/llm_harness_anthropic.py
 uv run python app/run_many.py
 ```
 ## Local Harness (no API)

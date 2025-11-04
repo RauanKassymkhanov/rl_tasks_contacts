@@ -1,60 +1,57 @@
 import pandas as pd
 import re
+from typing import Optional
 
 def clean_contacts(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-
-    df["name"] = df["name"].str.strip().str.replace(r"\s+", " ", regex=True)
-
-    def is_valid_email(email):
-        if not isinstance(email, str):
-            return False
-        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,10}$"
-        return bool(re.match(pattern, email)) and email.count('@') == 1
-
-    df["email"] = df["email"].str.lower()
-    df = df[df["email"].apply(is_valid_email)]
-
-    def normalize_phone(row):
-        phone = row["phone"]
-        country = row["country"]
-        if not isinstance(phone, str):
-            return ""
-
-        phone = "".join(filter(str.isdigit, phone))
-
-        if not phone:
-            return ""
-
-        if phone.startswith("+"):
-            plus_removed = phone[1:]
-            if len(plus_removed) < 7 or len(plus_removed) > 15:
-                return ""
-            return "+" + plus_removed
-        else:
-            if not isinstance(country, str) or len(country) != 2:
-                return ""
-            
-            if country.upper() == "US":
-                if len(phone) == 10:
-                    return "+1" + phone
-                elif len(phone) == 11 and phone.startswith("1"):
-                    return "+" + phone
-                else:
-                    return ""
-            
-            return ""
-
-    df["phone"] = df.apply(normalize_phone, axis=1)
-
-    def is_valid_e164(phone):
-        if not phone:
-            return True
-        pattern = r"^\+\d{7,15}$"
-        return bool(re.match(pattern, phone))
+    result_df = df.copy()
     
-    df = df[df.apply(lambda row: is_valid_e164(row["phone"]), axis=1) | (df['phone'] == "")]
-
-    df = df.drop_duplicates(subset=["email", "phone"], keep="first")
-
-    return df[["name", "email", "phone", "country"]]
+    result_df['name'] = result_df['name'].astype(str).str.strip()
+    result_df['name'] = result_df['name'].apply(lambda x: re.sub(r'\s+', ' ', x))
+    
+    result_df['email'] = result_df['email'].astype(str).str.strip().str.lower()
+    email_pattern = r'^[^@\s]+@[^@\s]+\.[A-Za-z]{2,10}$'
+    result_df = result_df[result_df['email'].str.match(email_pattern, na=False)]
+    
+    cc_map = {"US": "1", "GB": "44", "DE": "49", "KZ": "7", "FR": "33", "ES": "34"}
+    
+    def normalize_phone(phone, country):
+        if pd.isna(phone):
+            return ""
+        
+        phone = str(phone)
+        phone = re.sub(r'[^\d+]', '', phone)
+        
+        if phone.startswith('+'):
+            phone = '+' + re.sub(r'[^\d]', '', phone[1:])
+            if re.match(r'^\+\d{8,}$', phone):
+                return phone
+            else:
+                return ""
+        else:
+            digits = re.sub(r'[^\d]', '', phone)
+            if not digits:
+                return ""
+            
+            if pd.isna(country) or country not in cc_map:
+                country = "US"
+            
+            cc = cc_map[country]
+            
+            if country in ["GB", "DE"] and digits.startswith('0'):
+                digits = digits[1:]
+            
+            if country == "US" and len(digits) == 11 and digits.startswith('1'):
+                final_phone = '+' + digits
+            else:
+                final_phone = '+' + cc + digits
+            
+            if re.match(r'^\+\d{8,}$', final_phone):
+                return final_phone
+            else:
+                return ""
+    
+    result_df['phone'] = result_df.apply(lambda row: normalize_phone(row['phone'], row['country']), axis=1)
+    
+    result_df = result_df.drop_duplicates(subset=['email', 'phone'])
+    
+    return result_df[['name', 'email', 'phone', 'country']]

@@ -1,6 +1,7 @@
 import sys, re
 from pathlib import Path
-import google.generativeai as genai
+from anthropic import Anthropic
+from anthropic._exceptions import BadRequestError, AuthenticationError, APIStatusError
 from config import get_settings
 
 root = Path(__file__).parent
@@ -24,45 +25,43 @@ user = (
 
 def sanitize_code(text: str) -> str:
     s = text.strip()
-
-    # strip markdown code fences ``` or ```python
     s = re.sub(r"^\s*```(?:python)?\s*", "", s, flags=re.IGNORECASE)
     s = re.sub(r"\s*```\s*$", "", s)
-
-    # if entire output is a single triple-quoted string, unwrap it
     m = re.fullmatch(r'\s*(?P<q>("{3}|\'{3}))(.*?)(?P=q)\s*', s, flags=re.DOTALL)
     if m:
         s = m.group(3).strip()
-
-    # if it still starts with a triple-quoted comment (docstring) that encloses everything, unwrap once
     if re.match(r'^\s*(?:r|u|f|rf|fr)?("{3}|\'{3})', s, flags=re.IGNORECASE):
         parts = re.split(r'("{3}|\'{3})', s, maxsplit=2)
         if len(parts) == 3:
-            # parts = [before, quote, after]; before is likely empty
             after = parts[2]
-            # drop up to the closing triple quotes
             end = re.search(r'("{3}|\'{3})', after)
             if end:
                 s = after[end.end():].lstrip()
-
     return s
 
 
 settings = get_settings()
-if not settings.GEMINI_API_KEY:
-    print("Set GEMINI_API_KEY in .env or environment")
+if not settings.ANTHROPIC_API_KEY:
+    print("Set ANTHROPIC_API_KEY in .env or environment")
     sys.exit(1)
 
-genai.configure(api_key=settings.GEMINI_API_KEY)
-model = genai.GenerativeModel(settings.GEMINI_MODEL)
+client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-resp = model.generate_content([{"role": "user", "parts": [system + "\n\n" + user]}])
-code = getattr(resp, "text", "") or ""
-code = sanitize_code(code)
-
-if "def clean_contacts(" not in code:
-    print("Model did not return a clean_contacts implementation")
+try:
+    resp = client.messages.create(
+        model=settings.ANTHROPIC_MODEL,
+        max_tokens=2000,
+        temperature=0,
+        system=system,
+        messages=[{"role": "user", "content": user}],
+    )
+    code = "".join([p.text for p in resp.content if getattr(p, "type", None) == "text"])
+    code = sanitize_code(code)
+    if "def clean_contacts(" not in code:
+        print("Model did not return a clean_contacts implementation")
+        sys.exit(1)
+    target.write_text(code, encoding="utf-8")
+    print("student_solution.py written")
+except (BadRequestError, AuthenticationError, APIStatusError) as e:
+    print(f"Anthropic API error: {e}")
     sys.exit(1)
-
-target.write_text(code, encoding="utf-8")
-print("student_solution.py written")

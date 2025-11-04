@@ -4,8 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: Optional[str]
+    ANTHROPIC_API_KEY: Optional[str] = None
+    ANTHROPIC_MODEL: Optional[str]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
