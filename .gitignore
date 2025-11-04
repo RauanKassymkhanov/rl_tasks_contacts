@@ -38,3 +38,5 @@ tmp/
 temp/
 *.zip
 *.csv
+
+uv.lock
