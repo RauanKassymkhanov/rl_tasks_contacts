@@ -1,5 +1,9 @@
 # RL Task: Contacts Cleaning
 
+**Summary:** 
+A small, self-contained RL-style task for LLMs. The model must implement `clean_contacts(df)` using only `pandas` and `re`: normalize names, validate emails, convert phones to strict E.164, drop duplicates, and return the exact schema. A property-based grader checks every requirement; you can run locally or generate a solution via an LLM harness.
+
+
 ## Setup (uv)
 ```bash
 uv venv
